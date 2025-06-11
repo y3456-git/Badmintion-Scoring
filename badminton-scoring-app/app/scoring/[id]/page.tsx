@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Minus, Plus, Play, Square, Trophy, Clock, Users } from "lucide-react"
+import { Minus, Plus, Play, Square, Trophy, Clock, Users, Feather } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { matchAPI } from "@/app/services/api"
 import { toast } from "sonner"
@@ -46,6 +46,7 @@ export default function ScoringPage({ params }: { params: Promise<{ id: string }
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [elapsedTime, setElapsedTime] = useState<string>("")
+  const [servingPlayer, setServingPlayer] = useState<1 | 2 | null>(null);
 
   useEffect(() => {
     if (resolvedParams.id) {
@@ -98,6 +99,9 @@ export default function ScoringPage({ params }: { params: Promise<{ id: string }
       })
 
       if (response && !response.error) {
+        if (action === 'increment') {
+          setServingPlayer(player === 'player1' ? 1 : 2);
+        }
         await loadMatch() // Reload match data
         toast.success('Score updated')
       } else {
@@ -169,6 +173,26 @@ export default function ScoringPage({ params }: { params: Promise<{ id: string }
     } catch (error) {
       console.error('Failed to end match:', error)
       toast.error('Failed to end match')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleAbruptEndMatch = async () => {
+    if (!match || isUpdating) return
+
+    setIsUpdating(true)
+    try {
+      const response = await matchAPI.endMatchAbruptly(match.id)
+      if (response.success) {
+        toast.success('Match ended abruptly')
+        router.push('/')
+      } else {
+        toast.error(response.message || 'Failed to end match abruptly')
+      }
+    } catch (error) {
+      console.error('Failed to end match abruptly:', error)
+      toast.error('Failed to end match abruptly')
     } finally {
       setIsUpdating(false)
     }
@@ -267,8 +291,13 @@ export default function ScoringPage({ params }: { params: Promise<{ id: string }
                   <div className="flex items-center justify-between p-6 bg-blue-50 rounded-lg">
                     <div className="flex items-center space-x-4">
                       <div className="text-2xl font-bold text-blue-600">{getSetWins(1)}</div>
-                      <div>
-                        <h3 className="text-xl font-semibold">{match.player1}</h3>
+                      <div className="flex flex-col">
+                        <div className="flex items-center">
+                          <h3 className="text-xl font-semibold">{match.player1}</h3>
+                          {servingPlayer === 1 && (
+                            <Feather className="ml-2 h-5 w-5 text-yellow-500 fill-yellow-500" />
+                          )}
+                        </div>
                         <p className="text-sm text-gray-600">Sets Won</p>
                       </div>
                     </div>
@@ -281,7 +310,7 @@ export default function ScoringPage({ params }: { params: Promise<{ id: string }
                       >
                         <Minus className="h-4 w-4" />
                       </Button>
-                      <div className="text-6xl font-bold text-blue-600 min-w-[100px] text-center">
+                      <div className="text-6xl font-bold text-blue-600 min-w-[100px] text-center flex items-center justify-center relative">
                         {currentSet.player1_score}
                       </div>
                       <Button
@@ -303,8 +332,13 @@ export default function ScoringPage({ params }: { params: Promise<{ id: string }
                   <div className="flex items-center justify-between p-6 bg-red-50 rounded-lg">
                     <div className="flex items-center space-x-4">
                       <div className="text-2xl font-bold text-red-600">{getSetWins(2)}</div>
-                      <div>
-                        <h3 className="text-xl font-semibold">{match.player2}</h3>
+                      <div className="flex flex-col">
+                        <div className="flex items-center">
+                          <h3 className="text-xl font-semibold">{match.player2}</h3>
+                          {servingPlayer === 2 && (
+                            <Feather className="ml-2 h-5 w-5 text-yellow-500 fill-yellow-500" />
+                          )}
+                        </div>
                         <p className="text-sm text-gray-600">Sets Won</p>
                       </div>
                     </div>
@@ -317,7 +351,7 @@ export default function ScoringPage({ params }: { params: Promise<{ id: string }
                       >
                         <Minus className="h-4 w-4" />
                       </Button>
-                      <div className="text-6xl font-bold text-red-600 min-w-[100px] text-center">
+                      <div className="text-6xl font-bold text-red-600 min-w-[100px] text-center flex items-center justify-center relative">
                         {currentSet.player2_score}
                       </div>
                       <Button
@@ -354,6 +388,11 @@ export default function ScoringPage({ params }: { params: Promise<{ id: string }
                         End Match
                       </Button>
                     )
+                  )}
+                  {match.status === "live" && (
+                    <Button onClick={handleAbruptEndMatch} variant="outline" className="text-red-500 border-red-500 hover:bg-red-50 hover:text-red-600">
+                      End Match Abruptly
+                    </Button>
                   )}
                 </div>
               </CardContent>

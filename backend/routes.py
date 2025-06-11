@@ -367,6 +367,98 @@ def end_match(match_id):
                 'message': f'Error ending match: {str(e)}'
             }), 400
 
+@app.route('/api/matches/<int:match_id>/end-abruptly', methods=['POST'])
+def end_match_abruptly(match_id):
+    """Abruptly end a match, declaring winner of current set based on points or a draw"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        try:
+            # Get match details and current set scores
+            cursor.execute('''
+            SELECT m.start_time, m.current_set, m.total_sets, m.max_points,
+                   s.player1_score, s.player2_score
+            FROM match m
+            JOIN score s ON m.id = s.match_id AND m.current_set = s.set_number
+            WHERE m.id = ?
+            ''', (match_id,))
+            match_data = cursor.fetchone()
+
+            if not match_data:
+                return jsonify({'success': False, 'message': 'Match not found or current set not active'}), 404
+
+            start_time_str, current_set, total_sets, max_points, current_p1_score, current_p2_score = match_data
+
+            # Calculate sets won by each player BEFORE this abrupt ending
+            cursor.execute('''
+            SELECT set_number, player1_score, player2_score
+            FROM score
+            WHERE match_id = ? AND completed = 1 AND set_number < ?
+            ''', (match_id, current_set))
+            previous_sets = cursor.fetchall()
+
+            player1_sets_won = sum(1 for s in previous_sets if s['player1_score'] > s['player2_score'])
+            player2_sets_won = sum(1 for s in previous_sets if s['player2_score'] > s['player1_score'])
+
+            final_p1_score_current_set = current_p1_score
+            final_p2_score_current_set = current_p2_score
+
+            # Check for 1-1 draw scenario
+            if player1_sets_won == 1 and player2_sets_won == 1:
+                # If both have won 1 set and match ends abruptly, declare overall draw
+                # Current set scores can remain as they are or be reset to 0-0
+                # We'll keep them as they are and just mark it completed
+                pass
+            else:
+                # For non-draw scenarios, declare a winner for the current set
+                if current_p1_score > current_p2_score:
+                    final_p1_score_current_set = max_points
+                    final_p2_score_current_set = 0
+                elif current_p2_score > current_p1_score:
+                    final_p2_score_current_set = max_points
+                    final_p1_score_current_set = 0
+                else:
+                    # If scores are tied and not a 1-1 set situation, still complete the set as 0-0
+                    final_p1_score_current_set = 0
+                    final_p2_score_current_set = 0
+
+            # Mark current set as completed with adjusted scores
+            cursor.execute('''
+            UPDATE score
+            SET completed = 1, player1_score = ?, player2_score = ?
+            WHERE match_id = ? AND set_number = ?
+            ''', (final_p1_score_current_set, final_p2_score_current_set, match_id, current_set))
+
+            # Calculate duration
+            end_time = datetime.now()
+            duration = None
+            if start_time_str:
+                start_time = datetime.fromisoformat(start_time_str)
+                duration_delta = end_time - start_time
+                hours, remainder = divmod(duration_delta.total_seconds(), 3600)
+                minutes, _ = divmod(remainder, 60)
+                duration = f"{int(hours)}h {int(minutes)}m"
+
+            # Update match status to completed
+            cursor.execute('''
+            UPDATE match SET status = 'completed', end_time = ?, duration = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            ''', (end_time.isoformat(), duration, match_id))
+
+            conn.commit()
+            return jsonify({
+                'success': True,
+                'message': 'Match ended abruptly',
+                'end_time': end_time.isoformat(),
+                'duration': duration
+            })
+        except Exception as e:
+            conn.rollback()
+            return jsonify({
+                'success': False,
+                'message': f'Error ending match abruptly: {str(e)}'
+            }), 400
+
 @app.route('/api/matches/<int:match_id>/score', methods=['PUT'])
 def update_score(match_id):
     """Update match score"""

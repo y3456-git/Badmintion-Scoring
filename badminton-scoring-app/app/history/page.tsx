@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Search, Filter, Trophy, Clock, MapPin } from "lucide-react"
+import { Calendar, Search, Filter, Trophy, Clock, MapPin, Users } from "lucide-react"
 import Link from "next/link"
 import { matchAPI } from "@/app/services/api"
 import { toast } from "sonner"
@@ -19,6 +19,7 @@ import {
   availableCourts,
   availableEventTypes
 } from "@/app/utils/formatting"
+import { settingsAPI } from "@/app/services/api"
 
 interface HistoricalMatch {
   id: number
@@ -50,10 +51,12 @@ export default function HistoryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [sortBy, setSortBy] = useState<'end_time' | 'scheduled_date'>('end_time')
+  const [eventTypes, setEventTypes] = useState<string[]>([])
 
   useEffect(() => {
     loadMatches()
-  }, [eventFilter, courtFilter, dateFilter, searchTerm, sortOrder, sortBy])
+    loadEventTypes()
+  }, [])
 
   const loadMatches = async () => {
     try {
@@ -88,21 +91,31 @@ export default function HistoryPage() {
     }
   }
 
+  const loadEventTypes = async () => {
+    try {
+      const settings = await settingsAPI.getSettings()
+      const types = settings.default_event_types?.split(',') || []
+      setEventTypes(types)
+    } catch (error) {
+      console.error('Failed to fetch event types:', error)
+      toast.error('Failed to load event types')
+    }
+  }
+
   const getWinner = (match: HistoricalMatch) => {
-    let player1Sets = 0
-    let player2Sets = 0
+    const player1Sets = match.scores.filter((set) => set.completed && set.player1_score > set.player2_score).length
+    const player2Sets = match.scores.filter((set) => set.completed && set.player2_score > set.player1_score).length
 
-    match.scores.forEach(set => {
-      if (set.completed) {
-        if (set.player1_score > set.player2_score) {
-          player1Sets++
-        } else {
-          player2Sets++
-        }
-      }
-    })
+    if (player1Sets > player2Sets) return match.player1
+    if (player2Sets > player1Sets) return match.player2
+    return null
+  }
 
-    return player1Sets > player2Sets ? match.player1 : match.player2
+  const isMatchDraw = (match: HistoricalMatch) => {
+    if (match.status !== 'completed') return false;
+    const player1Sets = match.scores.filter((set) => set.completed && set.player1_score > set.player2_score).length
+    const player2Sets = match.scores.filter((set) => set.completed && set.player2_score > set.player1_score).length
+    return player1Sets === player2Sets;
   }
 
   const getFinalScore = (match: HistoricalMatch) => {
@@ -134,25 +147,40 @@ export default function HistoryPage() {
 
   // Filter handlers
   const handleEventFilterChange = (value: string) => {
-    console.log('Event filter changed to:', value) // Debug log
     setEventFilter(value)
   }
 
   const handleCourtFilterChange = (value: string) => {
-    console.log('Court filter changed to:', value) // Debug log
     setCourtFilter(value)
   }
 
-  const handleDateFilterChange = (value: string) => {
-    setDateFilter(value)
+  const handleDateFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDateFilter(e.target.value)
+  }
+
+  const handleSearchTermChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value)
+  }
+
+  const handleSortChange = (value: 'end_time' | 'scheduled_date') => {
+    setSortBy(value)
   }
 
   const handleSortOrderChange = (value: 'asc' | 'desc') => {
     setSortOrder(value)
   }
 
-  const handleSortByChange = (value: 'end_time' | 'scheduled_date') => {
-    setSortBy(value)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "live":
+        return "bg-green-500"
+      case "completed":
+        return "bg-blue-500"
+      case "scheduled":
+        return "bg-yellow-500"
+      default:
+        return "bg-gray-500"
+    }
   }
 
   if (isLoading) {
@@ -207,7 +235,7 @@ export default function HistoryPage() {
                   <Input
                     placeholder="Search players, match number..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={handleSearchTermChange}
                     className="pl-10"
                   />
                 </div>
@@ -223,7 +251,7 @@ export default function HistoryPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Events</SelectItem>
-                    {availableEventTypes.map((eventType) => (
+                    {eventTypes.map((eventType) => (
                       <SelectItem key={eventType} value={eventType}>
                         {formatEventType(eventType)}
                       </SelectItem>
@@ -256,14 +284,14 @@ export default function HistoryPage() {
                 <Input 
                   type="date" 
                   value={dateFilter} 
-                  onChange={(e) => handleDateFilterChange(e.target.value)}
+                  onChange={handleDateFilterChange}
                   className="w-full"
                 />
               </div>
 
               <div>
                 <label className="text-sm font-medium mb-2 block">Sort By</label>
-                <Select value={sortBy} onValueChange={handleSortByChange}>
+                <Select value={sortBy} onValueChange={handleSortChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select sort field" />
                   </SelectTrigger>
@@ -309,18 +337,26 @@ export default function HistoryPage() {
 
         {/* Match List */}
         <div className="space-y-4">
-          {matches.map((match) => (
-            <Card key={match.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-4 mb-3">
-                      <h3 className="text-lg font-semibold">{match.match_number}</h3>
-                      <Badge variant="secondary">{formatEventType(match.event_type)}</Badge>
-                      <Badge className="bg-blue-500 text-white">COMPLETED</Badge>
+          {matches.map((match) => {
+            const winner = getWinner(match);
+            const draw = isMatchDraw(match);
+            return (
+              <Card key={match.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-lg">{formatEventType(match.event_type)}</CardTitle>
+                      <CardDescription className="flex items-center mt-1">
+                        <MapPin className="h-4 w-4 mr-1" />
+                        {formatCourt(match.court)}
+                      </CardDescription>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <Badge className={`${getStatusColor(match.status)} text-white`}>{match.status.toUpperCase()}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col md:flex-row md:justify-between">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 md:mb-0 flex-1">
                       <div>
                         <p className="text-sm text-gray-600">Players</p>
                         <p className="font-medium">{match.player1}</p>
@@ -328,12 +364,23 @@ export default function HistoryPage() {
                       </div>
 
                       <div>
-                        <p className="text-sm text-gray-600">Winner</p>
-                        <p className="font-medium text-green-600 flex items-center">
-                          <Trophy className="h-4 w-4 mr-1" />
-                          {getWinner(match)}
-                        </p>
-                        <p className="text-sm text-gray-500">Score: {getFinalScore(match)}</p>
+                        <p className="text-sm text-gray-600">Outcome</p>
+                        {winner && (
+                          <Badge className="bg-green-600 text-white">
+                            <Trophy className="h-4 w-4 mr-1" />
+                            {winner} Wins
+                          </Badge>
+                        )}
+                        {draw && (
+                          <Badge className="bg-gray-600 text-white">
+                            <Users className="h-4 w-4 mr-1" />
+                            Match Drawn
+                          </Badge>
+                        )}
+                        {!winner && !draw && match.status === 'completed' && (
+                          <Badge variant="outline" className="text-gray-500">No Result</Badge>
+                        )}
+                        <p className="text-sm text-gray-500">Score: {match.scores.filter(s => s.completed && s.player1_score > s.player2_score).length}-{match.scores.filter(s => s.completed && s.player2_score > s.player1_score).length}</p>
                       </div>
 
                       <div>
@@ -352,24 +399,24 @@ export default function HistoryPage() {
                         <p className="text-sm text-gray-600">Date & Time</p>
                         <p className="font-medium">{formatDate(match.date)}</p>
                         <p className="text-sm text-gray-500">
-                          {formatTime(match.start_time)} - {formatTime(match.end_time)}
+                          {match.start_time && match.end_time ? `${formatTime(match.start_time)} - ${formatTime(match.end_time)}` : 'N/A'}
                         </p>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col space-y-2 ml-4">
-                    <Link href={`/match/${match.id}`}>
-                      <Button size="sm">View Details</Button>
-                    </Link>
-                    <Button size="sm" variant="outline">
-                      Export
-                    </Button>
+                    <div className="flex flex-col space-y-2 mt-4 md:mt-0 md:ml-4">
+                      <Link href={`/match/${match.id}`}>
+                        <Button size="sm" className="w-full">View Details</Button>
+                      </Link>
+                      <Button size="sm" variant="outline" className="w-full">
+                        Export
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         {/* Empty State */}

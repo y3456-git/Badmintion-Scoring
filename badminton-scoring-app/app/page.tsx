@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Clock, MapPin, Users, Trophy } from "lucide-react"
+import { Clock, MapPin, Users, Trophy, Feather } from "lucide-react"
 import Link from "next/link"
 import { formatDateTime, formatCourt, formatEventType, formatElapsedTime } from "@/app/utils/formatting"
 
@@ -131,6 +131,19 @@ export default function HomePage() {
     }
   }
 
+  const getServingPlayer = (match: LiveMatch) => {
+    if (match.status === 'live') {
+      const currentSetScores = match.scores.find(set => set.set_number === match.current_set);
+      if (currentSetScores) {
+        if (currentSetScores.player1_score > currentSetScores.player2_score) return 1;
+        if (currentSetScores.player2_score > currentSetScores.player1_score) return 2;
+        // If tied, or no points, for simplicity, default to player 1 for display
+        if (currentSetScores.player1_score > 0 || currentSetScores.player2_score > 0) return 1;
+      }
+    }
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -192,13 +205,23 @@ export default function HomePage() {
                   {/* Players */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="font-medium">{match.player1 || 'Player 1'}</span>
+                      <span className="font-medium flex items-center">
+                        {match.player1 || 'Player 1'}
+                        {getServingPlayer(match) === 1 && match.status === 'live' && (
+                          <Feather className="ml-2 h-4 w-4 text-yellow-500 fill-yellow-500" />
+                        )}
+                      </span>
                       <span className="text-lg font-bold">
                         {match.scores && match.scores[match.current_set - 1] ? match.scores[match.current_set - 1].player1_score : 0}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="font-medium">{match.player2 || 'Player 2'}</span>
+                      <span className="font-medium flex items-center">
+                        {match.player2 || 'Player 2'}
+                        {getServingPlayer(match) === 2 && match.status === 'live' && (
+                          <Feather className="ml-2 h-4 w-4 text-yellow-500 fill-yellow-500" />
+                        )}
+                      </span>
                       <span className="text-lg font-bold">
                         {match.scores && match.scores[match.current_set - 1] ? match.scores[match.current_set - 1].player2_score : 0}
                       </span>

@@ -5,25 +5,15 @@ export const formatCourt = (court: string) => {
 
 // Event type formatting
 export const formatEventType = (eventType: string) => {
-  const formatMap: Record<string, string> = {
-    'mens_singles': "Men's Singles",
-    'womens_singles': "Women's Singles",
-    'mens_doubles': "Men's Doubles",
-    'womens_doubles': "Women's Doubles",
-    'mixed_doubles': "Mixed Doubles"
-  }
-  return formatMap[eventType] || eventType
+  // Convert backend format to display format
+  return eventType
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
 }
 
 // Available options
 export const availableCourts = ['court1', 'court2', 'court3', 'court4']
-export const availableEventTypes = [
-  'mens_singles',
-  'womens_singles',
-  'mens_doubles',
-  'womens_doubles',
-  'mixed_doubles'
-]
 
 // Format match number
 export const formatMatchNumber = (matchNumber: string) => {

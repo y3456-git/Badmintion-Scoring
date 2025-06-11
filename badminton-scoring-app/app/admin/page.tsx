@@ -194,6 +194,7 @@ function ScheduleMatchForm() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [courtsInUse, setCourtsInUse] = useState<string[]>([])
+  const [eventTypes, setEventTypes] = useState<string[]>([])
 
   useEffect(() => {
     // Fetch live matches to get courts in use
@@ -206,7 +207,21 @@ function ScheduleMatchForm() {
         // Optionally handle error
       }
     }
+
+    // Fetch event types from settings
+    const fetchEventTypes = async () => {
+      try {
+        const settings = await settingsAPI.getSettings()
+        const types = settings.default_event_types?.split(',') || []
+        setEventTypes(types)
+      } catch (error) {
+        console.error('Failed to fetch event types:', error)
+        toast.error('Failed to load event types')
+      }
+    }
+
     fetchLiveMatches()
+    fetchEventTypes()
   }, [])
 
   // List of all courts
@@ -275,11 +290,11 @@ function ScheduleMatchForm() {
                   <SelectValue placeholder="Select event type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="mens_singles">Men's Singles</SelectItem>
-                  <SelectItem value="womens_singles">Women's Singles</SelectItem>
-                  <SelectItem value="mens_doubles">Men's Doubles</SelectItem>
-                  <SelectItem value="womens_doubles">Women's Doubles</SelectItem>
-                  <SelectItem value="mixed_doubles">Mixed Doubles</SelectItem>
+                  {eventTypes.map((eventType) => (
+                    <SelectItem key={eventType} value={eventType}>
+                      {formatEventType(eventType)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

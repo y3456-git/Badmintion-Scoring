@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Clock, MapPin, Trophy, Users, Calendar } from "lucide-react"
+import { Clock, MapPin, Trophy, Users, Calendar, Feather } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { matchAPI } from "@/app/services/api"
@@ -29,6 +29,7 @@ interface MatchDetails {
   deuce_enabled: boolean
   status: "scheduled" | "live" | "completed"
   shuttles_used: number
+  current_set: number
   scores: Array<{
     set_number: number
     player1_score: number
@@ -109,6 +110,36 @@ export default function MatchDetailsPage() {
     return null
   }
 
+  const getServingPlayer = (match: MatchDetails) => {
+    if (match.status === 'live') {
+      const currentSet = match.scores.find(set => set.set_number === match.current_set);
+      if (currentSet) {
+        // In a live match, the player who just scored is often assumed to be serving.
+        // If scores are tied or no points, we can default to P1 or previous logic.
+        if (currentSet.player1_score > currentSet.player2_score) return 1;
+        if (currentSet.player2_score > currentSet.player1_score) return 2;
+        // If tied, for simplicity, we can say player 1 serves or no one shown
+        if (currentSet.player1_score > 0 || currentSet.player2_score > 0) return 1;
+      }
+    } else if (match.status === 'completed') {
+      // For completed matches, if we want to show who 'served' the last point,
+      // it's the one who got the last point to win the set.
+      const lastSet = match.scores[match.scores.length - 1];
+      if (lastSet && lastSet.completed) {
+        if (lastSet.player1_score > lastSet.player2_score) return 1;
+        if (lastSet.player2_score > lastSet.player1_score) return 2;
+      }
+    }
+    return null;
+  }
+
+  const isMatchDraw = (match: MatchDetails) => {
+    if (match.status !== 'completed') return false;
+    const player1Sets = match.scores.filter((set) => set.completed && set.player1_score > set.player2_score).length
+    const player2Sets = match.scores.filter((set) => set.completed && set.player2_score > set.player1_score).length
+    return player1Sets === player2Sets;
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -176,6 +207,12 @@ export default function MatchDetailsPage() {
                       {winner} Wins
                     </Badge>
                   )}
+                  {!winner && isMatchDraw(match) && (
+                    <Badge className="bg-gray-600 text-white">
+                      <Users className="h-4 w-4 mr-1" />
+                      Match Drawn
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -185,7 +222,12 @@ export default function MatchDetailsPage() {
                     <div
                       className={`text-center p-6 rounded-lg ${winner === match.player1 ? "bg-green-50 border-2 border-green-200" : "bg-gray-50"}`}
                     >
-                      <h3 className="text-2xl font-bold mb-2">{match.player1}</h3>
+                      <h3 className="text-2xl font-bold mb-2 flex items-center justify-center">
+                        {match.player1}
+                        {getServingPlayer(match) === 1 && (
+                          <Feather className="ml-2 h-5 w-5 text-yellow-500 fill-yellow-500" />
+                        )}
+                      </h3>
                       <div className="text-3xl font-bold text-blue-600">
                         {match.scores.filter((set) => set.completed && set.player1_score > set.player2_score).length}
                       </div>
@@ -194,7 +236,12 @@ export default function MatchDetailsPage() {
                     <div
                       className={`text-center p-6 rounded-lg ${winner === match.player2 ? "bg-green-50 border-2 border-green-200" : "bg-gray-50"}`}
                     >
-                      <h3 className="text-2xl font-bold mb-2">{match.player2}</h3>
+                      <h3 className="text-2xl font-bold mb-2 flex items-center justify-center">
+                        {match.player2}
+                        {getServingPlayer(match) === 2 && (
+                          <Feather className="ml-2 h-5 w-5 text-yellow-500 fill-yellow-500" />
+                        )}
+                      </h3>
                       <div className="text-3xl font-bold text-red-600">
                         {match.scores.filter((set) => set.completed && set.player2_score > set.player1_score).length}
                       </div>
@@ -223,7 +270,13 @@ export default function MatchDetailsPage() {
                         <div>
                           <p className="text-sm text-gray-600">{match.player1}</p>
                           <p
-                            className={`text-2xl font-bold ${set.completed && set.player1_score > set.player2_score ? "text-green-600" : "text-red-600"}`}
+                            className={`text-2xl font-bold ${
+                              set.completed
+                                ? set.player1_score > set.player2_score
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                                : "text-gray-900"
+                            }`}
                           >
                             {set.player1_score}
                           </p>
@@ -234,7 +287,13 @@ export default function MatchDetailsPage() {
                         <div>
                           <p className="text-sm text-gray-600">{match.player2}</p>
                           <p
-                            className={`text-2xl font-bold ${set.completed && set.player2_score > set.player1_score ? "text-green-600" : "text-red-600"}`}
+                            className={`text-2xl font-bold ${
+                              set.completed
+                                ? set.player2_score > set.player1_score
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                                : "text-gray-900"
+                            }`}
                           >
                             {set.player2_score}
                           </p>

@@ -3,7 +3,7 @@ import './globals.css'
 import { Toaster } from "sonner"
 
 export const metadata: Metadata = {
-  title: 'v0 App',
+  title: 'Badminton Scoring Software',
   description: 'Created with v0',
   generator: 'v0.dev',
 }

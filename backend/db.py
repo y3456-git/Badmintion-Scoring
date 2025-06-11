@@ -87,7 +87,7 @@ def init_db():
         ('default_total_sets', '3'),
         ('default_deuce_enabled', '1'),
         ('default_courts', '1,2,3,4'),
-        ('default_event_types', 'Singles,Doubles,Mixed Doubles')
+        ('default_event_types', 'Mens Singles,Mens Doubles,Womens Singles,Womens Doubles,Mixed Doubles,Boys Singles U17,Girls Doubles U17,Boys Singles U19,Girls Singles U17,Girls Singles U19,Boys Doubles U17')
         ''')
         
         conn.commit()

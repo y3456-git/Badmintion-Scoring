@@ -118,6 +118,14 @@ export const matchAPI = {
     });
     return response.json();
   },
+
+  endMatchAbruptly: async (matchId: number) => {
+    const response = await fetch(`${API_BASE_URL}/matches/${matchId}/end-abruptly`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    return response.json();
+  },
 };
 
 // Player API
